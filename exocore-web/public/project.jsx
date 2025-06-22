@@ -1,18 +1,14 @@
-// SolidJS Dark Themed Project Creator UI - Replit Style (Corrected Template Fetch)
 import { render } from 'solid-js/web';
 import { createSignal, createResource, onMount, Show, For } from 'solid-js';
 import { Alert, Spinner } from 'solid-bootstrap';
 
 const BASE_URL = '/private/server/exocore/web';
 
-// --- CORRECTED: TEMPLATE FETCH FUNCTION ---
-// This function will now correctly fetch templates from your backend via BASE_URL
 const fetchTemplates = async () => {
     const res = await fetch(`${BASE_URL}/templates`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to fetch templates');
     return res.json();
 };
-// --- END CORRECTION ---
 
 const checkProjectStatus = async () => {
     try {
