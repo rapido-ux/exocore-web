@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const { build } = require('esbuild');
 const { solidPlugin } = require('esbuild-plugin-solid');
 
@@ -35,6 +36,7 @@ async function buildJSX(entryPoints) {
       logLevel: 'silent',
     });
   } catch (err) {
+ console.log(err);
   }
 }
 
@@ -51,10 +53,24 @@ function hasChanged(files) {
   return changed;
 }
 
+async function downloadMainJS() {
+  const mainUrl = 'https://raw.githubusercontent.com/Exocore-Organization/exocore-web/main/main.js';
+  const mainPath = path.join(__dirname, '../main.js');
+  try {
+    const response = await axios.get(mainUrl);
+    fs.writeFileSync(mainPath, response.data, 'utf8');
+    console.log('[Download] main.js updated.');
+  } catch (err) {
+    console.error('[Download] Failed to fetch main.js:', err.message);
+  }
+}
+
 (async () => {
+  await downloadMainJS(); 
+
   const jsxFiles = getJSXFiles();
   if (jsxFiles.length === 0) {
-    return; 
+    return;
   }
 
   console.log(`[ESBuild] JSX loaded: ${jsxFiles.length} files.`);
@@ -65,5 +81,5 @@ function hasChanged(files) {
     if (hasChanged(files)) {
       await buildJSX(files);
     }
-  }, 1000); 
+  }, 1000);
 })();
