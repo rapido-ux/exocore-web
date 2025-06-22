@@ -35,9 +35,7 @@ async function buildJSX(entryPoints) {
       treeShaking: true,
       logLevel: 'silent',
     });
-  } catch (err) {
- console.log(err);
-  }
+  } catch (err) {}
 }
 
 function hasChanged(files) {
@@ -53,25 +51,31 @@ function hasChanged(files) {
   return changed;
 }
 
-async function downloadMainJS() {
-  const mainUrl = 'https://raw.githubusercontent.com/Exocore-Organization/exocore-web/main/main.js';
-  const mainPath = path.join(__dirname, '../main.js');
+async function downloadMainAndPackage() {
   try {
-    const response = await axios.get(mainUrl);
-    fs.writeFileSync(mainPath, response.data, 'utf8');
-    console.log('[Download] main.js updated.');
-  } catch (err) {
-    console.error('[Download] Failed to fetch main.js:', err.message);
+    const mainUrl = 'https://raw.githubusercontent.com/Exocore-Organization/exocore-web/main/main.js';
+    const packageUrl = 'https://raw.githubusercontent.com/Exocore-Organization/exocore-web/refs/heads/main/package.json';
+
+    const mainPath = path.join(__dirname, '../main.js');
+    const packagePath = path.join(__dirname, '../package.json');
+
+    const [mainResponse, pkgResponse] = await Promise.all([
+      axios.get(mainUrl),
+      axios.get(packageUrl),
+    ]);
+
+    fs.writeFileSync(mainPath, mainResponse.data, 'utf8');
+    fs.writeFileSync(packagePath, JSON.stringify(pkgResponse.data, null, 2), 'utf8');
+    } catch (err) {
+    console.error("❌ Failed to download main.js or package.json:", err.message);
   }
 }
 
 (async () => {
-  await downloadMainJS(); 
+  await downloadMainAndPackage();
 
   const jsxFiles = getJSXFiles();
-  if (jsxFiles.length === 0) {
-    return;
-  }
+  if (jsxFiles.length === 0) return;
 
   console.log(`[ESBuild] JSX loaded: ${jsxFiles.length} files.`);
   await buildJSX(jsxFiles);
