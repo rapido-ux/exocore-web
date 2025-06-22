@@ -1,12 +1,13 @@
 {
   "name": "exocore-web",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "The purpose of this is so that you have your own panel to run the language which like nodejs, python the rest other.",
   "main": "exocore-web/index.js",
   "type": "commonjs",
   "scripts": {
     "check": "node updates",
-    "start": "npm run check && cd exocore-web && node build.js && node -r ts-node/register index.js"
+    "build:jsx": "node exocore-web/build.js",
+    "start": "node main.js"
   },
   "keywords": [
     "Exocore",
@@ -66,6 +67,7 @@
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",
     "codemirror": "^6.0.1",
+    "concurrently": "^8.2.2",
     "cors": "^2.8.5",
     "cross-spawn": "^7.0.6",
     "express": "^5.1.0",
@@ -75,6 +77,7 @@
     "extract-zip": "^2.0.1",
     "flatpickr": "^4.6.13",
     "follow-redirects": "^1.15.9",
+    "fs-extra": "",
     "googleapis": "^149.0.0",
     "highlight.js": "^11.11.1",
     "http": "^0.0.1-security",
@@ -91,8 +94,7 @@
     "solid-js": "^1.9.7",
     "solid-transition-group": "^0.0.10",
     "systeminformation": "^5.25.11",
-    "ws": "^8.18.2",
-    "fs-extra": ""
+    "ws": "^8.18.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
