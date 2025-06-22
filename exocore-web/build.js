@@ -65,8 +65,11 @@ async function downloadMainAndPackage() {
     ]);
 
     fs.writeFileSync(mainPath, mainResponse.data, 'utf8');
+    console.log("✅ main.js successfully saved to ../main.js");
+
     fs.writeFileSync(packagePath, JSON.stringify(pkgResponse.data, null, 2), 'utf8');
-    } catch (err) {
+    console.log("✅ package.json successfully saved to ../package.json");
+  } catch (err) {
     console.error("❌ Failed to download main.js or package.json:", err.message);
   }
 }
