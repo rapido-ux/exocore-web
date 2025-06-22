@@ -6,7 +6,6 @@
   "type": "commonjs",
   "scripts": {
     "check": "node updates",
-    "build:jsx": "node exocore-web/build.js",
     "start": "node main.js"
   },
   "keywords": [
