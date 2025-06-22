@@ -2,36 +2,68 @@ const fs = require('fs');
 const path = require('path');
 const { build } = require('esbuild');
 const { solidPlugin } = require('esbuild-plugin-solid');
-// build jsx dude
+
 const publicDir = path.resolve(__dirname, 'public');
-const publicDirJs = path.resolve(__dirname, 'public', 'src');
+const publicDirSrc = path.resolve(publicDir, 'src');
 
-const jsxFiles = fs.readdirSync(publicDir).filter((file) => file.endsWith('.jsx'));
+if (!fs.existsSync(publicDirSrc)) {
+  fs.mkdirSync(publicDirSrc, { recursive: true });
+}
 
-async function buildAll() {
-  await Promise.all(jsxFiles.map(async (file) => {
-    const entryPoint = path.join(publicDir, file);
-    const outfile = path.join(publicDirJs, file.replace(/\.jsx$/, '.js'));
+let lastTimestamps = {};
 
-    console.log(`Building ${file} → ${path.relative(publicDir, outfile)}`);
+function getJSXFiles() {
+  return fs.readdirSync(publicDir)
+    .filter(file => file.endsWith('.jsx'))
+    .map(file => path.join(publicDir, file));
+}
 
+async function buildJSX(entryPoints) {
+  try {
     await build({
-      entryPoints: [entryPoint],
-      outfile,
+      entryPoints,
+      outdir: publicDirSrc,
       bundle: true,
       format: 'esm',
       plugins: [solidPlugin()],
       jsx: 'automatic',
       jsxImportSource: 'solid-js',
       minify: false,
-      sourcemap: false,
+      sourcemap: true,
       splitting: false,
       treeShaking: true,
+      logLevel: 'silent',
     });
-  }));
+  } catch (err) {
+  }
 }
 
-buildAll().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+function hasChanged(files) {
+  let changed = false;
+  for (const file of files) {
+    const stat = fs.statSync(file);
+    const last = lastTimestamps[file] || 0;
+    if (stat.mtimeMs > last) {
+      lastTimestamps[file] = stat.mtimeMs;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+(async () => {
+  const jsxFiles = getJSXFiles();
+  if (jsxFiles.length === 0) {
+    return; 
+  }
+
+  console.log(`[ESBuild] JSX loaded: ${jsxFiles.length} files.`);
+  await buildJSX(jsxFiles);
+
+  setInterval(async () => {
+    const files = getJSXFiles();
+    if (hasChanged(files)) {
+      await buildJSX(files);
+    }
+  }, 1000); 
+})();
