@@ -1,323 +1,483 @@
 import { render } from 'solid-js/web';
-import { createResource, createSignal, onMount, Show, For } from 'solid-js';
-import { Form, Button, Alert, Spinner } from 'solid-bootstrap';
+import { createSignal, createResource, onMount, Show, For } from 'solid-js';
+import { Alert, Spinner } from 'solid-bootstrap';
 
 const BASE_URL = '/private/server/exocore/web';
 
 const fetchTemplates = async () => {
-  const res = await fetch(`${BASE_URL}/templates`, { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to fetch templates');
-  return res.json();
+    const res = await fetch(`${BASE_URL}/templates`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to fetch templates');
+    return res.json();
 };
 
 const checkProjectStatus = async () => {
-  try {
-    const res = await fetch(`${BASE_URL}/project/status`, { method: 'POST' });
-    if (!res.ok) return;
-    const json = await res.json();
-    if (json.exists) {
-      window.location.href = `${BASE_URL}/public/dashboard`;
+    try {
+        const res = await fetch(`${BASE_URL}/project/status`, { method: 'POST' });
+        const json = await res.json();
+        if (json.exists) window.location.href = `${BASE_URL}/public/dashboard`;
+    } catch (err) {
+        console.error('Error checking project status:', err);
     }
-  } catch (err) {
-    console.error('Error checking project status:', err);
-  }
 };
 
 function App() {
-  const [templates, { refetch: refetchTemplates }] = createResource(fetchTemplates);
-  const [projectName, setProjectName] = createSignal('');
-  const [templateId, setTemplateId] = createSignal('');
-  const [gitUrl, setGitUrl] = createSignal('');
-  const [inputType, setInputType] = createSignal('template');
-  const [status, setStatus] = createSignal('');
-  const [loading, setLoading] = createSignal(false);
+    const [templates] = createResource(fetchTemplates);
+    const [step, setStep] = createSignal(1); // 1 for source, 2 for project name
+    const [projectName, setProjectName] = createSignal('');
+    const [selectedTemplateId, setSelectedTemplateId] = createSignal('');
+    const [selectedTemplateGitUrl, setSelectedTemplateGitUrl] = createSignal('');
+    const [customGitUrl, setCustomGitUrl] = createSignal('');
+    const [projectSourceType, setProjectSourceType] = createSignal('template');
 
-  onMount(() => {
-    checkProjectStatus();
+    const [status, setStatus] = createSignal('');
+    const [loading, setLoading] = createSignal(false);
 
-    document.body.style.margin = '0';
-    document.body.style.fontFamily = "'Patrick Hand', cursive";
-    document.body.style.background = `
-      repeating-linear-gradient(
-        to bottom,
-        #fff8e1 0px,
-        #fff8e1 23px,
-        #fdf2cc 24px,
-        #fff8e1 25px
-      ),
-      linear-gradient(
-        to right,
-        transparent 5%,
-        #ffab91 5.5%,
-        #ffab91 6.5%,
-        transparent 7%,
-        transparent 100%
-      )
-    `;
-    document.body.style.backgroundRepeat = 'repeat-y';
-    document.body.style.backgroundSize = '100% 25px, 100% 100%';
-    document.body.style.color = '#444';
+    onMount(() => {
+        checkProjectStatus();
+        document.body.style = `
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        `;
+        const link = document.createElement('link');
+        link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+    });
 
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-  });
+    const inputStyle = {
+        background: '#2a2a2a',
+        color: '#fff',
+        border: '1px solid #444',
+        padding: '0.8rem 1rem',
+        'border-radius': '8px',
+        width: '100%',
+        'font-family': 'inherit',
+        'font-size': '1rem',
+        'box-shadow': 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        'transition': 'border-color 0.2s ease, box-shadow 0.2s ease',
+    };
 
-  const isCreateDisabled = () => {
-    if (loading()) return true;
-    if (!projectName().trim()) return true; // Check trimmed project name
-    if (inputType() === 'template' && !templateId()) return true;
-    if (inputType() === 'gitUrl' && !gitUrl().trim()) return true;
-    return false;
-  };
+    const inputFocusStyle = {
+        'border-color': '#007bff',
+        'box-shadow': '0 0 0 3px rgba(0, 123, 255, 0.25)',
+    };
 
-  const handleCreate = async () => {
-    setLoading(true);
-    setStatus('');
-    const finalProjectName = projectName().trim(); // Use trimmed project name for submission
-    if (!finalProjectName) {
-        setStatus('Failed: Project name cannot be empty or just spaces.');
-        setLoading(false);
-        return;
-    }
+    const buttonPrimaryColor = '#007bff';
+    const buttonHoverColor = '#0056b3';
+    const buttonSecondaryColor = '#555';
+    const buttonSecondaryHoverColor = '#777';
 
-    try {
-      const bodyPayload = {
-        name: finalProjectName,
-        template: inputType() === 'template' ? templateId() : undefined,
-        gitUrl: inputType() === 'gitUrl' ? gitUrl().trim() : undefined, // Trim Git URL as well
-      };
-
-      const res = await fetch(`${BASE_URL}/project`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload),
-      });
-
-      const text = await res.text();
-      if (res.ok) {
-        setStatus(`Success: ${text}`);
-        setTimeout(() => {
-          window.location.href = `${BASE_URL}/public/dashboard`;
-        }, 1500);
-      } else {
-        setStatus(`Failed: ${text || 'Unknown error'}`);
-      }
-    } catch (err) {
-      setStatus(`Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const commonInputStyle = {
-    background: 'rgba(255, 255, 255, 0.8)',
-    border: '1px solid #b0bec5',
-    'font-size': '1rem',
-    'font-family': 'inherit',
-    'border-radius': '6px',
-    padding: '0.6rem 0.8rem',
-  };
-
-  return (
-    <div
-      style={{
-        padding: '2vh 1vw',
-        display: 'flex',
-        'justify-content': 'center',
+    const customRadioContainerStyle = {
+        'display': 'flex',
         'align-items': 'center',
-        'min-height': '100vh',
-        'box-sizing': 'border-box',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          'max-width': '520px',
-          'background-color': 'rgba(255, 253, 240, 0.97)',
-          'border-radius': '15px',
-          border: '1px solid #e0e0e0',
-          'box-shadow': '0 6px 18px rgba(0,0,0,0.12)',
-          padding: '2rem 2.5rem',
-        }}
-      >
-        <h2
-          style={{
-            'text-align': 'center',
-            'margin-bottom': '2rem',
-            'font-size': '2.3rem',
-            color: '#2c3e50',
-          }}
-        >
-          ✨ Create New Project ✨
-        </h2>
+        'cursor': 'pointer',
+        'user-select': 'none',
+        'margin-right': '1.5rem',
+    };
 
-        <Form.Group class="mb-4">
-          <Form.Label style={{ 'font-weight': 'bold', color: '#34495e' }}>
-            Project Source
-          </Form.Label>
-          <div style={{ 'margin-top': '0.5rem' }}>
-            <Form.Check
-              inline
-              type="radio"
-              label="From Template"
-              name="inputType"
-              id="inputTypeTemplate"
-              value="template"
-              checked={inputType() === 'template'}
-              onChange={() => setInputType('template')}
-              style={{ 'font-family': 'inherit', 'margin-right': '1rem' }}
-            />
-            <Form.Check
-              inline
-              type="radio"
-              label="From Git URL"
-              name="inputType"
-              id="inputTypeGitUrl"
-              value="gitUrl"
-              checked={inputType() === 'gitUrl'}
-              onChange={() => setInputType('gitUrl')}
-              style={{ 'font-family': 'inherit' }}
-            />
-          </div>
-        </Form.Group>
+    const hiddenRadioInputStyle = {
+        'position': 'absolute',
+        'opacity': '0',
+        'width': '0',
+        'height': '0',
+    };
 
-        <Show
-          when={inputType() === 'template'}
-          fallback={
-            <Form.Group class="mb-4">
-              <Form.Label style={{ 'font-weight': 'bold', color: '#34495e' }}>
-                Git Repository URL
-              </Form.Label>
-              <Form.Control
-                placeholder="e.g. https://github.com/user/repo.git"
-                value={gitUrl()}
-                onInput={(e) => setGitUrl(e.currentTarget.value)}
-                style={commonInputStyle}
-                disabled={loading()}
-              />
-            </Form.Group>
-          }
-        >
-          <Form.Group class="mb-4">
-            <Form.Label style={{ 'font-weight': 'bold', color: '#34495e' }}>Template</Form.Label>
-            <Show
-              when={!templates.loading && templates()}
-              fallback={
-                <div style={{ 'text-align': 'center', 'margin-top': '1rem' }}>
-                  <Spinner animation="border" variant="secondary" />{' '}
-                  <span style={{ 'margin-left': '0.5rem' }}>Loading templates...</span>
-                </div>
-              }
-            >
-              <Form.Select
-                value={templateId()}
-                onInput={(e) => setTemplateId(e.currentTarget.value)}
-                style={commonInputStyle}
-                disabled={loading()}
-              >
-                <option value="">-- Choose Template --</option>
-                <For each={templates()}>
-                  {(template) => <option value={template.id}>{template.name}</option>}
-                </For>
-              </Form.Select>
-            </Show>
-            <Show when={templates.error}>
-              <Alert variant="danger" class="mt-2" style={{ 'font-family': 'inherit' }}>
-                Could not load templates: {templates.error.message}
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={refetchTemplates}
-                  style={{ 'margin-left': '10px', 'font-family': 'inherit' }}
-                >
-                  Retry
-                </Button>
-              </Alert>
-            </Show>
-          </Form.Group>
-        </Show>
+    const customRadioIndicatorStyle = {
+        'display': 'inline-block',
+        'width': '20px',
+        'height': '20px',
+        'border': '2px solid #666',
+        'border-radius': '50%',
+        'margin-right': '0.8rem',
+        'position': 'relative',
+        'transition': 'all 0.2s ease-in-out',
+        'flex-shrink': 0,
+    };
 
-        <Form.Group class="mb-4">
-          <Form.Label style={{ 'font-weight': 'bold', color: '#34495e' }}>Project Name</Form.Label>
-          <Form.Control
-            placeholder="e.g. my-awesome-app"
-            value={projectName()}
-            onInput={(e) => setProjectName(e.currentTarget.value.trim())}
-            style={commonInputStyle}
-            disabled={loading()}
-          />
-        </Form.Group>
+    const customRadioIndicatorCheckedStyle = {
+        'border-color': buttonPrimaryColor,
+        'background-color': buttonPrimaryColor,
+        'box-shadow': `0 0 0 4px rgba(0, 123, 255, 0.3)`,
+    };
 
-        <Button
-          style={{
-            width: '100%',
-            padding: '0.85rem',
-            'font-weight': 'bold',
-            'font-size': '1.1rem',
-            background: '#ff8c00',
-            color: 'white',
-            border: 'none',
-            'border-radius': '8px',
-            'font-family': 'inherit',
-            'box-shadow': '0 4px 8px rgba(0,0,0,0.15)',
-            transition:
-              'transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out',
-            cursor: isCreateDisabled() ? 'not-allowed' : 'pointer',
-            opacity: isCreateDisabled() ? 0.7 : 1,
-          }}
-          onClick={handleCreate}
-          disabled={isCreateDisabled()}
-          onMouseOver={(e) => {
-            if (!isCreateDisabled()) {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 12px rgba(0,0,0,0.2)';
-              e.currentTarget.style.background = '#e67e00';
+    const customRadioInnerDotStyle = {
+        'position': 'absolute',
+        'top': '50%',
+        'left': '50%',
+        'transform': 'translate(-50%, -50%)',
+        'width': '10px',
+        'height': '10px',
+        'border-radius': '50%',
+        'background': '#fff',
+        'opacity': '0',
+        'transition': 'opacity 0.2s ease-in-out',
+    };
+
+    const customRadioInnerDotCheckedStyle = {
+        'opacity': '1',
+    };
+
+    const templateCardStyle = (isSelected) => ({
+        padding: '1.2rem',
+        border: `1px solid ${isSelected ? buttonPrimaryColor : '#333'}`,
+        'border-radius': '10px',
+        cursor: 'pointer',
+        background: isSelected ? '#2a2a3a' : '#1f1f1f',
+        'transition': 'all 0.2s ease-in-out',
+        'display': 'flex',
+        'flex-direction': 'column',
+        'align-items': 'flex-start',
+        'gap': '0.8rem',
+        '&:hover': {
+            background: '#252525',
+            'border-color': isSelected ? buttonPrimaryColor : '#666'
+        },
+        'box-shadow': isSelected ? `0 0 10px rgba(0, 123, 255, 0.4)` : 'none'
+    });
+
+    const templateImageStyle = {
+        'width': '70px',
+        'height': '70px',
+        'object-fit': 'contain',
+        'border-radius': '8px',
+        'background': '#3a3a3a',
+        'padding': '5px',
+    };
+
+    const templateDescriptionStyle = {
+        'font-size': '0.9rem',
+        'color': '#bbb',
+        'line-height': '1.4'
+    };
+
+    const isNextDisabledStep1 = () => {
+        if (projectSourceType() === 'template' && !selectedTemplateId()) return true;
+        if (projectSourceType() === 'gitUrl' && !customGitUrl().trim()) return true;
+        return false;
+    };
+
+    const isCreateDisabledStep2 = () => {
+        return loading() || !projectName().trim();
+    };
+
+
+    const handleProceedToNameStep = () => {
+        if (isNextDisabledStep1()) return;
+        setStep(2);
+    };
+
+    const handleBackToSourceStep = () => {
+        setStep(1);
+        setStatus('');
+    };
+
+    const handleCreateProject = async () => {
+        setLoading(true);
+        setStatus('');
+
+        const finalName = projectName().trim();
+        if (!finalName) {
+            setStatus('Project name cannot be empty');
+            setLoading(false);
+            return;
+        }
+
+        let gitToUse = '';
+        if (projectSourceType() === 'template') {
+            const chosenTemplate = templates()?.find(t => t.id === selectedTemplateId());
+            if (chosenTemplate) {
+                gitToUse = chosenTemplate.git;
+            } else {
+                setStatus('Error: Selected template not found.');
+                setLoading(false);
+                return;
             }
-          }}
-          onMouseOut={(e) => {
-            if (!isCreateDisabled()) {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-              e.currentTarget.style.background = '#ff8c00';
+        } else { // 'gitUrl'
+            gitToUse = customGitUrl().trim();
+            if (!gitToUse) {
+                setStatus('Git URL cannot be empty.');
+                setLoading(false);
+                return;
             }
-          }}
-        >
-          {loading() ? (
-            <>
-              <Spinner
-                as="span"
-                animation="border"
-                size="sm"
-                role="status"
-                aria-hidden="true"
-                style={{ 'margin-right': '8px' }}
-              />
-              Creating...
-            </>
-          ) : (
-            '🚀 Create Project'
-          )}
-        </Button>
+        }
 
-        <Show when={status()}>
-          <Alert
-            class="mt-4"
-            variant={status().startsWith('Success') ? 'success' : 'danger'}
-            style={{
-              'font-family': 'inherit',
-              'text-align': 'center',
-              padding: '0.8rem',
-              'border-radius': '6px',
-            }}
-          >
-            {status()}
-          </Alert>
-        </Show>
-      </div>
-    </div>
-  );
+        try {
+            const payload = {
+                name: finalName,
+                gitUrl: gitToUse,
+            };
+            const res = await fetch(`${BASE_URL}/project`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const text = await res.text();
+            if (res.ok) {
+                setStatus(`Success: ${text}`);
+                setTimeout(() => window.location.href = `${BASE_URL}/public/dashboard`, 1500);
+            } else {
+                setStatus(`Failed: ${text || 'Unknown error'}`);
+            }
+        } catch (err) {
+            setStatus(`Error: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    return (
+        <div style={{ display: 'flex', 'justify-content': 'center', 'align-items': 'center', 'min-height': '100vh', padding: '2vh 1vw' }}>
+            <div style={{
+                width: '100%',
+                'max-width': '600px',
+                background: '#1a1a1a',
+                padding: '2.5rem',
+                'border-radius': '16px',
+                'box-shadow': '0 10px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)',
+                'border': '1px solid rgba(255,255,255,0.08)'
+            }}>
+                <h2 style={{
+                    'text-align': 'center',
+                    'margin-bottom': '2.5rem',
+                    'font-size': '2rem',
+                    'color': '#fff',
+                    'text-shadow': '0 0 8px rgba(255,255,255,0.1)'
+                }}>✨ Create New Project ✨</h2>
+
+                <Show when={step() === 1}>
+                    <h3 style={{ 'margin-bottom': '1.5rem', 'font-size': '1.5rem', 'color': '#fff' }}>Choose Project Source</h3>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ 'display': 'flex', 'gap': '1.5rem' }}>
+                            <label style={customRadioContainerStyle}>
+                                <input
+                                    type="radio"
+                                    name="projectSource"
+                                    checked={projectSourceType() === 'template'}
+                                    onChange={() => setProjectSourceType('template')}
+                                    style={hiddenRadioInputStyle}
+                                />
+                                <span style={{
+                                    ...customRadioIndicatorStyle,
+                                    ...(projectSourceType() === 'template' && customRadioIndicatorCheckedStyle)
+                                }}>
+                                    <div style={{
+                                        ...customRadioInnerDotStyle,
+                                        ...(projectSourceType() === 'template' && customRadioInnerDotCheckedStyle)
+                                    }}></div>
+                                </span>
+                                Template
+                            </label>
+                            <label style={customRadioContainerStyle}>
+                                <input
+                                    type="radio"
+                                    name="projectSource"
+                                    checked={projectSourceType() === 'gitUrl'}
+                                    onChange={() => setProjectSourceType('gitUrl')}
+                                    style={hiddenRadioInputStyle}
+                                />
+                                <span style={{
+                                    ...customRadioIndicatorStyle,
+                                    ...(projectSourceType() === 'gitUrl' && customRadioIndicatorCheckedStyle)
+                                }}>
+                                    <div style={{
+                                        ...customRadioInnerDotStyle,
+                                        ...(projectSourceType() === 'gitUrl' && customRadioInnerDotCheckedStyle)
+                                    }}></div>
+                                </span>
+                                Git URL
+                            </label>
+                        </div>
+                    </div>
+
+                    <Show when={projectSourceType() === 'template'}>
+                        <label style={{ 'display': 'block', 'margin-bottom': '1rem', 'font-weight': '500', 'color': '#ccc' }}>Select a Template</label>
+                        <div style={{
+                            'max-height': '400px',
+                            'overflow-y': 'auto',
+                            'padding-right': '10px',
+                            'margin-bottom': '2rem',
+                            'display': 'grid',
+                            'grid-template-columns': 'repeat(auto-fill, minmax(200px, 1fr))',
+                            'gap': '1rem',
+                        }}>
+                            <Show when={templates.loading}>
+                                <p style={{ 'color': '#aaa', 'text-align': 'center', 'grid-column': '1 / -1' }}>Loading templates...</p>
+                            </Show>
+                            <Show when={templates.error}>
+                                <p style={{ 'color': '#f8d7da', 'text-align': 'center', 'grid-column': '1 / -1' }}>Error loading templates: {templates.error.message}</p>
+                            </Show>
+                            <For each={templates()}>{tpl => (
+                                <div
+                                    style={templateCardStyle(selectedTemplateId() === tpl.id)}
+                                    onClick={() => {
+                                        setSelectedTemplateId(tpl.id);
+                                        setSelectedTemplateGitUrl(tpl.git);
+                                    }}
+                                >
+                                    <img src={tpl.image} alt={tpl.name} style={templateImageStyle} />
+                                    <h4 style={{ 'margin': '0', 'color': '#fff', 'font-size': '1.1rem' }}>{tpl.name}</h4>
+                                    <p style={templateDescriptionStyle}>{tpl.describe}</p>
+                                </div>
+                            )}</For>
+                            <Show when={!templates.loading && !templates.error && templates()?.length === 0}>
+                                <p style={{ 'color': '#aaa', 'text-align': 'center', 'grid-column': '1 / -1' }}>No templates available.</p>
+                            </Show>
+                        </div>
+                    </Show>
+
+                    <Show when={projectSourceType() === 'gitUrl'}>
+                        <div style={{ marginBottom: '2rem' }}>
+                            <label style={{ 'display': 'block', 'margin-bottom': '0.8rem', 'font-weight': '500', 'color': '#ccc' }}>Git Repository URL</label>
+                            <input
+                                type="text"
+                                placeholder="https://github.com/user/repo.git"
+                                value={customGitUrl()}
+                                onInput={e => setCustomGitUrl(e.currentTarget.value)}
+                                style={{ ...inputStyle, ...(customGitUrl() && inputFocusStyle) }}
+                                onFocus={e => e.currentTarget.style.borderColor = inputFocusStyle['border-color']}
+                                onBlur={e => e.currentTarget.style.borderColor = inputStyle.border.split(' ')[2]}
+                                disabled={loading()}
+                            />
+                        </div>
+                    </Show>
+
+                    <div style={{ 'display': 'flex', 'justify-content': 'flex-end', 'gap': '0.8rem' }}>
+                        <button
+                            onClick={() => { /* Implement close/cancel logic, e.g., redirect or reset form */ alert("Close/Cancel action not yet implemented."); }}
+                            style={{
+                                padding: '0.7rem 1.4rem',
+                                background: buttonSecondaryColor,
+                                color: 'white',
+                                border: 'none',
+                                'border-radius': '8px',
+                                'font-size': '1rem',
+                                cursor: 'pointer',
+                                'transition': 'background 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = buttonSecondaryHoverColor}
+                            onMouseLeave={(e) => e.currentTarget.style.background = buttonSecondaryColor}
+                        >
+                            Close
+                        </button>
+                        <button
+                            onClick={handleProceedToNameStep}
+                            disabled={isNextDisabledStep1()}
+                            style={{
+                                padding: '0.7rem 1.4rem',
+                                background: !isNextDisabledStep1() ? buttonPrimaryColor : buttonSecondaryColor,
+                                color: 'white',
+                                border: 'none',
+                                'border-radius': '8px',
+                                'font-size': '1rem',
+                                cursor: !isNextDisabledStep1() ? 'pointer' : 'not-allowed',
+                                opacity: !isNextDisabledStep1() ? 1 : 0.6,
+                                'transition': 'background 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = !isNextDisabledStep1() ? buttonHoverColor : buttonSecondaryColor}
+                            onMouseLeave={(e) => e.currentTarget.style.background = !isNextDisabledStep1() ? buttonPrimaryColor : buttonSecondaryColor}
+                        >
+                            Next &raquo;
+                        </button>
+                    </div>
+                </Show>
+
+                <Show when={step() === 2}>
+                    <h3 style={{ 'margin-bottom': '1.5rem', 'font-size': '1.5rem', 'color': '#fff' }}>Name Your Project</h3>
+
+                    <div style={{ marginBottom: '3rem' }}>
+                        <label style={{ 'display': 'block', 'margin-bottom': '0.8rem', 'font-weight': '500', 'color': '#ccc' }}>Project Name</label>
+                        <input
+                            type="text"
+                            placeholder="e.g. my-awesome-app"
+                            value={projectName()}
+                            onInput={e => setProjectName(e.currentTarget.value)}
+                            style={{ ...inputStyle, ...(projectName() && inputFocusStyle) }}
+                            onFocus={e => e.currentTarget.style.borderColor = inputFocusStyle['border-color']}
+                            onBlur={e => e.currentTarget.style.borderColor = inputStyle.border.split(' ')[2]}
+                            disabled={loading()}
+                        />
+                    </div>
+
+                    <div style={{ 'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'gap': '0.8rem' }}>
+                        <button
+                            onClick={handleBackToSourceStep}
+                            style={{
+                                padding: '0.7rem 1.4rem',
+                                background: buttonSecondaryColor,
+                                color: 'white',
+                                border: 'none',
+                                'border-radius': '8px',
+                                'font-size': '1rem',
+                                cursor: 'pointer',
+                                'transition': 'background 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = buttonSecondaryHoverColor}
+                            onMouseLeave={(e) => e.currentTarget.style.background = buttonSecondaryColor}
+                        >
+                            &laquo; Back
+                        </button>
+                        <button
+                            onClick={handleCreateProject}
+                            disabled={isCreateDisabledStep2()}
+                            style={{
+                                padding: '1rem',
+                                background: buttonPrimaryColor,
+                                color: 'white',
+                                border: 'none',
+                                'border-radius': '10px',
+                                'font-size': '1.1rem',
+                                'font-weight': '700',
+                                cursor: isCreateDisabledStep2() ? 'not-allowed' : 'pointer',
+                                opacity: isCreateDisabledStep2() ? 0.6 : 1,
+                                'box-shadow': `0 4px 15px rgba(0, 123, 255, 0.4)`,
+                                'transition': 'background 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease',
+                                '&:hover': {
+                                    background: buttonHoverColor,
+                                    transform: isCreateDisabledStep2() ? 'none' : 'translateY(-2px)',
+                                    'box-shadow': isCreateDisabledStep2() ? `0 4px 15px rgba(0, 123, 255, 0.4)` : `0 6px 20px rgba(0, 123, 255, 0.6)`
+                                },
+                                '&:active': {
+                                    transform: isCreateDisabledStep2() ? 'none' : 'translateY(0)',
+                                    'box-shadow': isCreateDisabledStep2() ? `0 2px 10px rgba(0, 123, 255, 0.3)` : `0 2px 10px rgba(0, 123, 255, 0.3)`
+                                }
+                            }}
+                        >
+                            {loading() ? (
+                                <span style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'gap': '0.5rem' }}>
+                                    <Spinner animation="border" size="sm" /> Creating...
+                                </span>
+                            ) : '🚀 Create Project'}
+                        </button>
+                    </div>
+                </Show>
+
+                <Show when={status()}>
+                    <Alert
+                        class="mt-4"
+                        variant={status().startsWith('Success') ? 'success' : 'danger'}
+                        style={{
+                            'text-align': 'center',
+                            marginTop: '1.5rem',
+                            'border-radius': '8px',
+                            'padding': '0.8rem 1rem',
+                            'font-size': '0.95rem',
+                            'background-color': status().startsWith('Success') ? 'rgba(0, 128, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)',
+                            'color': status().startsWith('Success') ? '#a0ffa0' : '#ffafaf',
+                            'border-color': status().startsWith('Success') ? 'rgba(0, 128, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)'
+                        }}
+                    >
+                        {status()}
+                    </Alert>
+                </Show>
+            </div>
+        </div>
+    );
 }
 
 render(() => <App />, document.getElementById('app'));

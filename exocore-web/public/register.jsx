@@ -3,11 +3,13 @@ import { createSignal, onMount, Show } from 'solid-js';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/themes/dark.css';
 
+// SVG Icon Components
 const IconEye = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
 const IconEyeOff = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
 const IconUpload = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>;
 
 function App() {
+    // State signals for form data and UI status
     const [loading, setLoading] = createSignal(false);
     const [status, setStatus] = createSignal('');
     const [showPassword, setShowPassword] = createSignal(false);
@@ -15,35 +17,51 @@ function App() {
     const [form, setForm] = createSignal({ user: '', pass: '', email: '', avatar: '', bio: '', nickname: '', dob: '', cover_photo: '', country: '', timezone: '' });
     const [avatarFileName, setAvatarFileName] = createSignal('');
     const [coverPhotoFileName, setCoverPhotoFileName] = createSignal('');
+    const [validationErrors, setValidationErrors] = createSignal({});
 
+    // Refs for file input elements
     let avatarInputRef, coverPhotoInputRef;
 
+    /**
+     * Redirects the user to the dashboard if they are already logged in.
+     * Checks for authentication tokens in localStorage.
+     */
     function LoggedAlready() {
         if (localStorage.getItem('exocore-token') && localStorage.getItem('exocore-cookies')) {
             window.location.href = '/private/server/exocore/web/public/dashboard';
         }
     }
 
+    // Lifecycle hook: runs once after the component mounts
     onMount(() => {
         fetchLocation();
         initDatePicker();
         LoggedAlready();
-        setInterval(LoggedAlready, 5000);
+        setInterval(LoggedAlready, 5000); // Periodically check login status
     });
 
+    /**
+     * Initializes the flatpickr date picker on the date of birth input.
+     */
     function initDatePicker() {
         setTimeout(() => {
             const dobInput = document.getElementById('dob');
             if (dobInput) {
                 flatpickr(dobInput, {
-                    dateFormat: 'Y-m-d', maxDate: 'today', altInput: true,
-                    altFormat: 'F j, Y', appendTo: window.document.body,
+                    dateFormat: 'Y-m-d',
+                    maxDate: 'today',
+                    altInput: true,
+                    altFormat: 'F j, Y',
+                    appendTo: window.document.body,
                     onChange: (_, dateStr) => updateField('dob', dateStr),
                 });
             }
         }, 100);
     }
 
+    /**
+     * Fetches the user's country and timezone based on their IP address.
+     */
     async function fetchLocation() {
         try {
             const res = await fetch('https://ipwho.is/');
@@ -56,6 +74,11 @@ function App() {
         }
     }
 
+    /**
+     * Handles file selection for avatar and cover photo, updating the form state.
+     * @param {string} field - The form field to update ('avatar' or 'cover_photo').
+     * @param {Event} event - The file input change event.
+     */
     function handleFileChange(field, event) {
         const file = event.currentTarget.files[0];
         const targetSignal = field === 'avatar' ? setAvatarFileName : setCoverPhotoFileName;
@@ -66,30 +89,61 @@ function App() {
         }
         targetSignal(file.name);
         const reader = new FileReader();
-        reader.onload = () => setForm((prev) => ({ ...prev, [field]: reader.result }));
+        reader.onload = () => updateField(field, reader.result);
         reader.readAsDataURL(file);
     }
-
+    
+    /**
+     * Validates and submits the registration form data to the server.
+     * @param {Event} e - The form submission event.
+     */
     async function handleSubmit(e) {
         e.preventDefault();
         setLoading(true);
         setStatus('');
-        const { user, email, pass } = form();
-        if (!user || !email || !pass) {
-            setStatus('Username, Email, and Password are required.');
+        setValidationErrors({});
+
+        const currentForm = form();
+        // All fields are now required
+        const requiredFields = ['user', 'email', 'pass', 'nickname', 'dob', 'country', 'timezone', 'bio', 'avatar', 'cover_photo'];
+        const errors = {};
+
+        // Check for empty required fields
+        requiredFields.forEach(field => {
+            if (!currentForm[field]) {
+                const fieldName = { 
+                    user: 'Username', 
+                    pass: 'Password', 
+                    dob: 'Date of Birth',
+                    bio: 'Short Bio',
+                    avatar: 'Avatar',
+                    cover_photo: 'Cover Photo'
+                }[field] || field.charAt(0).toUpperCase() + field.slice(1);
+                errors[field] = `${fieldName} is required.`;
+            }
+        });
+        
+        // If there are validation errors, update state and stop submission
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            setStatus('Please complete all required fields.');
             setLoading(false);
             return;
         }
+
+        // Check for password strength issues
         if (passwordWarning()) {
             setStatus('Please correct the password issues before submitting.');
             setLoading(false);
             return;
         }
+
+        // Attempt to submit the form data
         try {
             const res = await fetch('/private/server/exocore/web/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form()),
+                body: JSON.stringify(currentForm),
             });
             const responseData = await res.json();
             if (!res.ok) throw new Error(responseData?.message || `Server error: ${res.status}`);
@@ -101,11 +155,17 @@ function App() {
         setLoading(false);
     }
 
+    /**
+     * Updates a form field's value in the state and performs validation.
+     * @param {string} field - The name of the field to update.
+     * @param {string} value - The new value for the field.
+     */
     function updateField(field, value) {
         let processedValue = (field === 'user' || field === 'email' || field === 'pass')
             ? value.replace(/\s/g, '')
             : value;
-
+        
+        // Password strength validation
         if (field === 'pass') {
             const warnings = [];
             if (processedValue.length > 0) {
@@ -115,10 +175,29 @@ function App() {
             }
             setPasswordWarning(warnings.length > 0 ? 'Password must ' + warnings.join(', ') + '.' : '');
         }
+
         setForm((prev) => ({ ...prev, [field]: processedValue }));
+        
+        // Clear the validation error for the field being edited
+        if (validationErrors()[field]) {
+            setValidationErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
     }
 
-    const isSubmitDisabled = () => loading() || !!passwordWarning() || !form().user || !form().email || !form().pass;
+    /**
+     * Determines if the submit button should be disabled based on form completion and validity.
+     * @returns {boolean} True if the button should be disabled.
+     */
+    const isSubmitDisabled = () => {
+        const f = form();
+        const requiredFields = ['user', 'email', 'pass', 'nickname', 'dob', 'country', 'timezone', 'bio', 'avatar', 'cover_photo'];
+        const hasEmptyFields = requiredFields.some(field => !f[field]);
+        return loading() || !!passwordWarning() || hasEmptyFields;
+    };
 
     return (
         <div class="register-page-wrapper">
@@ -144,9 +223,11 @@ function App() {
                 .input-wrapper { position: relative; }
                 .form-input, .form-textarea { width: 100%; padding: 0.9rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-inner); font-family: var(--font-body); font-size: 1rem; background-color: var(--bg-primary); color: var(--text-primary); box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; }
                 .form-input:focus, .form-textarea:focus { outline:0; border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(0, 170, 255, 0.2); }
+                .input-error { border-color: var(--error-color) !important; }
+                .input-error:focus { box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2) !important; }
                 .form-textarea { min-height: 80px; resize: vertical; }
                 .password-toggle { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; }
-                .password-warning { font-size: 0.875rem; color: var(--error-color); margin-top: 0.5rem; }
+                .field-error-message, .password-warning { font-size: 0.875rem; color: var(--error-color); margin-top: 0.5rem; }
                 .file-upload-btn { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-inner); cursor: pointer; transition: background-color 0.2s, border-color 0.2s; overflow: hidden; }
                 .file-upload-btn:hover { background-color: #2a2c3b; }
                 .file-name { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-align: left; }
@@ -161,60 +242,90 @@ function App() {
             `}</style>
             <div class="register-card">
                 <h1 class="register-header">Create Your Account</h1>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} novalidate>
                     <div class="form-grid">
+                        {/* Username */}
                         <div class="form-group">
                             <label class="form-label" for="user">Username</label>
-                            <input id="user" class="form-input" type="text" value={form().user} onInput={(e) => updateField('user', e.currentTarget.value)} />
+                            <input id="user" class="form-input" classList={{ 'input-error': !!validationErrors().user }} type="text" value={form().user} onInput={(e) => updateField('user', e.currentTarget.value)} />
+                            <Show when={validationErrors().user}><div class="field-error-message">{validationErrors().user}</div></Show>
                         </div>
+                        {/* Email */}
                         <div class="form-group">
                             <label class="form-label" for="email">Email Address</label>
-                            <input id="email" class="form-input" type="email" value={form().email} onInput={(e) => updateField('email', e.currentTarget.value)} />
+                            <input id="email" class="form-input" classList={{ 'input-error': !!validationErrors().email }} type="email" value={form().email} onInput={(e) => updateField('email', e.currentTarget.value)} />
+                            <Show when={validationErrors().email}><div class="field-error-message">{validationErrors().email}</div></Show>
                         </div>
-                        <div class="form-group">
+                        {/* Nickname */}
+                         <div class="form-group">
                             <label class="form-label" for="nickname">Display Name (Nickname)</label>
-                            <input id="nickname" class="form-input" type="text" value={form().nickname} onInput={(e) => updateField('nickname', e.currentTarget.value)} />
+                            <input id="nickname" class="form-input" classList={{ 'input-error': !!validationErrors().nickname }} type="text" value={form().nickname} onInput={(e) => updateField('nickname', e.currentTarget.value)} />
+                            <Show when={validationErrors().nickname}><div class="field-error-message">{validationErrors().nickname}</div></Show>
                         </div>
+                        {/* Password */}
                         <div class="form-group">
                             <label class="form-label" for="password">Password</label>
                             <div class="input-wrapper">
-                                <input id="password" class="form-input" type={showPassword() ? 'text' : 'password'} value={form().pass} onInput={(e) => updateField('pass', e.currentTarget.value)} />
+                                <input id="password" class="form-input" classList={{ 'input-error': !!validationErrors().pass || !!passwordWarning() }} type={showPassword() ? 'text' : 'password'} value={form().pass} onInput={(e) => updateField('pass', e.currentTarget.value)} />
                                 <button type="button" class="password-toggle" onClick={() => setShowPassword(!showPassword())}>
                                     <Show when={showPassword()} fallback={<IconEye />}><IconEyeOff /></Show>
                                 </button>
                             </div>
+                            <Show when={validationErrors().pass}><div class="field-error-message">{validationErrors().pass}</div></Show>
                             <Show when={passwordWarning()}><div class="password-warning">{passwordWarning()}</div></Show>
                         </div>
+                        {/* Date of Birth */}
                         <div class="form-group">
                             <label class="form-label" for="dob">Date of Birth</label>
-                            <input id="dob" class="form-input" type="text" placeholder="Select your birth date..." readOnly />
+                            <input id="dob" class="form-input" classList={{ 'input-error': !!validationErrors().dob }} type="text" placeholder="Select your birth date..." readOnly />
+                             <Show when={validationErrors().dob}><div class="field-error-message">{validationErrors().dob}</div></Show>
                         </div>
-                        <div class="form-group full-width">
-                             <label class="form-label">Short Bio (optional)</label>
-                             <textarea class="form-textarea" value={form().bio} onInput={(e) => updateField('bio', e.currentTarget.value)} />
+                        {/* Country */}
+                        <div class="form-group">
+                            <label class="form-label" for="country">Country</label>
+                            <input id="country" class="form-input" classList={{ 'input-error': !!validationErrors().country }} type="text" value={form().country} onInput={(e) => updateField('country', e.currentTarget.value)} />
+                            <Show when={validationErrors().country}><div class="field-error-message">{validationErrors().country}</div></Show>
                         </div>
+                        {/* Timezone */}
+                        <div class="form-group">
+                            <label class="form-label" for="timezone">Timezone</label>
+                            <input id="timezone" class="form-input" classList={{ 'input-error': !!validationErrors().timezone }} type="text" value={form().timezone} onInput={(e) => updateField('timezone', e.currentTarget.value)} />
+                            <Show when={validationErrors().timezone}><div class="field-error-message">{validationErrors().timezone}</div></Show>
+                        </div>
+                        {/* Bio */}
                         <div class="form-group full-width">
-                             <label class="form-label">Profile Images (Optional)</label>
+                            <label class="form-label" for="bio">Short Bio</label>
+                            <textarea id="bio" class="form-textarea" classList={{ 'input-error': !!validationErrors().bio }} value={form().bio} onInput={(e) => updateField('bio', e.currentTarget.value)} />
+                            <Show when={validationErrors().bio}><div class="field-error-message">{validationErrors().bio}</div></Show>
+                        </div>
+                        {/* File Uploads */}
+                        <div class="form-group full-width">
+                             <label class="form-label">Profile Images</label>
                              <div class="form-grid">
-                                <button type="button" class="file-upload-btn" onClick={() => avatarInputRef?.click()}>
-                                    <IconUpload />
-                                    <span class="file-name" title={avatarFileName()}>{avatarFileName() || 'Choose Avatar'}</span>
-                                </button>
-                                <button type="button" class="file-upload-btn" onClick={() => coverPhotoInputRef?.click()}>
-                                    <IconUpload />
-                                    <span class="file-name" title={coverPhotoFileName()}>{coverPhotoFileName() || 'Choose Cover Photo'}</span>
-                                </button>
+                                 <button type="button" class="file-upload-btn" classList={{ 'input-error': !!validationErrors().avatar }} onClick={() => avatarInputRef?.click()}>
+                                     <IconUpload />
+                                     <span class="file-name" title={avatarFileName()}>{avatarFileName() || 'Choose Avatar'}</span>
+                                 </button>
+                                 <button type="button" class="file-upload-btn" classList={{ 'input-error': !!validationErrors().cover_photo }} onClick={() => coverPhotoInputRef?.click()}>
+                                     <IconUpload />
+                                     <span class="file-name" title={coverPhotoFileName()}>{coverPhotoFileName() || 'Choose Cover Photo'}</span>
+                                 </button>
                              </div>
+                            <Show when={validationErrors().avatar}><div class="field-error-message">{validationErrors().avatar}</div></Show>
+                            <Show when={validationErrors().cover_photo && !validationErrors().avatar}><div class="field-error-message">{validationErrors().cover_photo}</div></Show>
                             <input type="file" accept="image/*" ref={el => avatarInputRef = el} onInput={(e) => handleFileChange('avatar', e)} style={{ display: 'none' }} />
                             <input type="file" accept="image/*" ref={el => coverPhotoInputRef = el} onInput={(e) => handleFileChange('cover_photo', e)} style={{ display: 'none' }} />
                         </div>
                     </div>
+                    {/* Submit Button */}
                     <button type="submit" class="register-btn" disabled={isSubmitDisabled()}>
                         {loading() ? 'Creating Account...' : 'Sign Up'}
                     </button>
+                    {/* Status Message */}
                     <Show when={status()}>
                         <div class={`status-message ${status().includes('success') ? 'status-success' : 'status-error'}`}>{status()}</div>
                     </Show>
+                    {/* Login Link */}
                     <div class="login-link-wrapper">
                         Already have an account? <a href="/private/server/exocore/web/public/login" class="login-link">Login here</a>
                     </div>
